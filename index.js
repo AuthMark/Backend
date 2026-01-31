@@ -106,7 +106,7 @@ async function handleCallback(url, request, env) {
   const accid = await generateAccid(userInfo.id, provider, env.ACCID_SECRET);
 
   // Get cookie check site URL (fallback to env variable if not in state)
-  const cookieCheckSite = env.COOKIECHECK_SITE || 'https://your-cookie-checker.example.com';
+  const cookieCheckSite = env.COOKIECHECK_SITE || 'https://authmark.github.io/CheckCookie/';
 
   // Redirect to COOKIECHECK with both fwacc and accid
   const redirectUrl = `${cookieCheckSite}?fwacc=${encodeURIComponent(fwacc)}&accid=${accid}`;
