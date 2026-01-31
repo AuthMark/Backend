@@ -1,5 +1,6 @@
 // Cloudflare Worker - OAuth Handler (ULTRA DEBUG VERSION)
 // This version shows DETAILED error messages to help diagnose issues
+// Debug Branch
 
 export default {
   async fetch(request, env) {
