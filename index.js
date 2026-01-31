@@ -1,13 +1,12 @@
-// Cloudflare Worker - OAuth Handler (ULTRA DEBUG VERSION)
-// This version shows DETAILED error messages to help diagnose issues
-// Debug Branch
+// Cloudflare Worker - OAuth Handler (PRODUCTION-READY DEBUG VERSION)
+// GitHub working ✅ | Now fixing Microsoft
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // Debug endpoint - shows all callback URLs
+    // Debug endpoint
     if (path === '/debug') {
       return new Response(JSON.stringify({
         message: "Copy these EXACT URLs to your OAuth app settings",
@@ -22,8 +21,8 @@ export default {
           GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID ? "✅ Set" : "❌ Missing",
           GOOGLE_CLIENT_SECRET: env.GOOGLE_CLIENT_SECRET ? "✅ Set" : "❌ Missing",
           GITHUB_CLIENT_ID: env.GITHUB_CLIENT_ID ? `✅ Set (${env.GITHUB_CLIENT_ID})` : "❌ Missing",
-          GITHUB_CLIENT_SECRET: env.GITHUB_CLIENT_SECRET ? `✅ Set (starts with: ${env.GITHUB_CLIENT_SECRET.substring(0, 4)}...)` : "❌ Missing",
-          MICROSOFT_CLIENT_ID: env.MICROSOFT_CLIENT_ID ? "✅ Set" : "❌ Missing",
+          GITHUB_CLIENT_SECRET: env.GITHUB_CLIENT_SECRET ? `✅ Set` : "❌ Missing",
+          MICROSOFT_CLIENT_ID: env.MICROSOFT_CLIENT_ID ? `✅ Set (${env.MICROSOFT_CLIENT_ID})` : "❌ Missing",
           MICROSOFT_CLIENT_SECRET: env.MICROSOFT_CLIENT_SECRET ? "✅ Set" : "❌ Missing",
           DISCORD_CLIENT_ID: env.DISCORD_CLIENT_ID ? "✅ Set" : "❌ Missing",
           DISCORD_CLIENT_SECRET: env.DISCORD_CLIENT_SECRET ? "✅ Set" : "❌ Missing",
@@ -44,13 +43,17 @@ export default {
       return handleCallback(url, request, env);
     } else {
       return new Response(`
-        OAuth Worker - Active
-        
-        Usage: /login/{provider}?fwacc=YOUR_SITE
-        
-        Available providers: google, github, microsoft, discord
-        
-        Debug info: ${url.origin}/debug
+OAuth Worker - Active ✅
+
+Usage: /login/{provider}?fwacc=YOUR_SITE
+
+Available providers:
+  ✅ google
+  ✅ github  
+  ✅ microsoft
+  ✅ discord
+
+Debug info: ${url.origin}/debug
       `, { status: 200 });
     }
   }
@@ -84,7 +87,8 @@ async function handleLogin(url, env) {
     microsoft: {
       authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
       clientId: env.MICROSOFT_CLIENT_ID,
-      scope: 'openid email profile'
+      // Updated scope to explicitly request Graph API access
+      scope: 'https://graph.microsoft.com/User.Read openid email profile offline_access'
     },
     discord: {
       authUrl: 'https://discord.com/api/oauth2/authorize',
@@ -132,9 +136,26 @@ async function handleCallback(url, request, env) {
 
   // Check for OAuth errors
   if (error) {
-    const errorMsg = `OAuth Error from ${provider}: ${error}${errorDescription ? ' - ' + errorDescription : ''}`;
+    const errorMsg = `
+===========================================
+OAuth Error from ${provider}
+===========================================
+
+Error: ${error}
+Description: ${errorDescription || 'No description provided'}
+
+Common fixes:
+- Make sure redirect URI matches exactly in ${provider} settings
+- Verify CLIENT_ID is correct
+- Check that required permissions/scopes are enabled
+
+===========================================
+    `.trim();
     console.error(`[CALLBACK] ${errorMsg}`);
-    return new Response(errorMsg, { status: 400 });
+    return new Response(errorMsg, { 
+      status: 400,
+      headers: { 'Content-Type': 'text/plain' }
+    });
   }
   
   if (!code || !stateParam) {
@@ -159,33 +180,35 @@ async function handleCallback(url, request, env) {
   console.log(`[CALLBACK] Exchanging code for token...`);
   const tokenData = await exchangeCodeForToken(provider, code, url.origin, env);
   
-  // DETAILED ERROR RESPONSE
   if (!tokenData || !tokenData.access_token) {
     const detailedError = `
 ===========================================
-DETAILED ERROR INFORMATION
+DETAILED ERROR - Token Exchange Failed
 ===========================================
 
 Provider: ${provider}
-Step: Token Exchange Failed
+Step: Exchanging authorization code for access token
 
 Token Response: ${JSON.stringify(tokenData, null, 2)}
 
-Common Causes:
-1. CLIENT_SECRET is incorrect
-2. CLIENT_ID doesn't match CLIENT_SECRET
-3. Callback URL doesn't match exactly
-
 Your Configuration:
-- CLIENT_ID: ${provider === 'github' ? env.GITHUB_CLIENT_ID : 'Check /debug endpoint'}
-- CLIENT_SECRET: ${provider === 'github' ? (env.GITHUB_CLIENT_SECRET ? 'Set (starts with: ' + env.GITHUB_CLIENT_SECRET.substring(0, 4) + '...)' : 'NOT SET') : 'Check /debug endpoint'}
+- CLIENT_ID: ${provider === 'github' ? env.GITHUB_CLIENT_ID : provider === 'microsoft' ? env.MICROSOFT_CLIENT_ID : '(check /debug)'}
+- CLIENT_SECRET: ${tokenData && tokenData.error === 'invalid_client' ? '❌ INCORRECT - Regenerate this!' : '(hidden)'}
 - Callback URL: ${url.origin}/callback/${provider}
 
+Common Causes:
+1. CLIENT_SECRET is incorrect → Generate new one in ${provider} settings
+2. CLIENT_ID doesn't match CLIENT_SECRET → Verify they're from same app
+3. Callback URL mismatch → Check ${provider} OAuth settings
+
 Next Steps:
-1. Go to ${provider === 'github' ? 'https://github.com/settings/developers' : 'provider settings'}
-2. Verify Client ID matches: ${provider === 'github' ? env.GITHUB_CLIENT_ID : '(check debug endpoint)'}
-3. Generate NEW Client Secret and update in Cloudflare Worker
-4. Make sure callback URL is EXACTLY: ${url.origin}/callback/${provider}
+${provider === 'microsoft' ? '1. Go to https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps' : 
+  provider === 'github' ? '1. Go to https://github.com/settings/developers' : 
+  provider === 'google' ? '1. Go to https://console.cloud.google.com/apis/credentials' :
+  '1. Go to https://discord.com/developers/applications'}
+2. Regenerate Client Secret
+3. Update CLOUDFLARE Worker environment variable
+4. Try again
 
 ===========================================
     `.trim();
@@ -202,32 +225,80 @@ Next Steps:
   // Get user info
   const userInfo = await getUserInfo(provider, tokenData.access_token);
   
-  // DETAILED ERROR RESPONSE FOR USER INFO
   if (!userInfo || !userInfo.id) {
     const detailedError = `
 ===========================================
-DETAILED ERROR INFORMATION
+DETAILED ERROR - Get User Info Failed
 ===========================================
 
 Provider: ${provider}
-Step: Get User Info Failed
+Step: Fetching user information using access token
 
 User Info Response: ${JSON.stringify(userInfo, null, 2)}
 
-Access Token: ${tokenData.access_token ? 'Received' : 'Missing'}
+Access Token: ${tokenData.access_token ? '✅ Received' : '❌ Missing'}
 
-Common Causes:
-1. Access token is invalid or expired
-2. OAuth scopes are incorrect
-3. Provider API is down
+${provider === 'microsoft' ? `
+MICROSOFT-SPECIFIC ISSUE:
+This error usually means API permissions are not configured in Azure Portal.
+
+REQUIRED FIX:
+1. Go to: https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps
+2. Click on your app
+3. Click "API permissions" in left sidebar
+4. Click "+ Add a permission"
+5. Select "Microsoft Graph" → "Delegated permissions"
+6. Add these permissions:
+   ✅ User.Read
+   ✅ email
+   ✅ openid
+   ✅ profile
+7. Click "Add permissions"
+8. Click "Grant admin consent for [Your Org]" (IMPORTANT!)
+9. Wait 2-5 minutes for changes to propagate
+10. Try logging in again
+
+Alternative Fix (if above doesn't work):
+The app might need "ID tokens" enabled:
+1. In Azure Portal → Your App → Authentication
+2. Under "Implicit grant and hybrid flows"
+3. Check ✅ "ID tokens"
+4. Click Save
+` : provider === 'google' ? `
+GOOGLE-SPECIFIC ISSUE:
+Common causes:
+1. OAuth consent screen not configured
+2. App is in testing mode and your account isn't added
+3. Required scopes not enabled
+
+Fix:
+1. Go to: https://console.cloud.google.com/apis/credentials/consent
+2. Make sure app is published or your account is in test users
+3. Check that scopes include: email, profile, openid
+` : provider === 'github' ? `
+GITHUB-SPECIFIC ISSUE:
+This is rare - token was received but user info failed.
+
+Fix:
+1. Check that scopes include: read:user user:email
+2. Try regenerating Client Secret
+3. Your GitHub account might have privacy settings blocking API access
+` : `
+DISCORD-SPECIFIC ISSUE:
+Common causes:
+1. Scopes don't include 'identify email'
+2. Bot token used instead of OAuth token
+
+Fix:
+1. Verify scopes in Discord app settings
+2. Make sure it's an OAuth app, not a bot
+`}
 
 Your OAuth Scopes:
-- ${provider}: ${provider === 'github' ? 'read:user user:email' : provider === 'google' ? 'openid email profile' : provider === 'microsoft' ? 'openid email profile' : 'identify email'}
-
-Next Steps:
-1. Check that scopes are enabled in your OAuth app
-2. Try regenerating the Client Secret
-3. Test the access token manually
+- ${provider}: ${provider === 'github' ? 'read:user user:email' : 
+                  provider === 'google' ? 'openid email profile' : 
+                  provider === 'microsoft' ? 'https://graph.microsoft.com/User.Read openid email profile' : 
+                  'identify email'}
 
 ===========================================
     `.trim();
@@ -249,7 +320,7 @@ Next Steps:
   const cookieCheckSite = env.COOKIECHECK_SITE || 'https://authmark.github.io/CheckCookie/';
   const redirectUrl = `${cookieCheckSite}?fwacc=${encodeURIComponent(fwacc)}&accid=${accid}`;
   
-  console.log(`[CALLBACK] Success! Redirecting to: ${cookieCheckSite}`);
+  console.log(`[CALLBACK] ✅ Success! Redirecting to: ${cookieCheckSite}`);
   return Response.redirect(redirectUrl, 302);
 }
 
@@ -282,8 +353,6 @@ async function exchangeCodeForToken(provider, code, origin, env) {
   const callbackUrl = `${origin}/callback/${provider}`;
 
   console.log(`[TOKEN] Requesting token from ${provider}`);
-  console.log(`[TOKEN] Client ID: ${config.clientId}`);
-  console.log(`[TOKEN] Callback URL: ${callbackUrl}`);
 
   const body = new URLSearchParams({
     client_id: config.clientId,
@@ -306,7 +375,6 @@ async function exchangeCodeForToken(provider, code, origin, env) {
     const data = await response.json();
     
     console.log(`[TOKEN] Response status: ${response.status}`);
-    console.log(`[TOKEN] Response data:`, JSON.stringify(data));
     
     if (!response.ok) {
       console.error(`[TOKEN] Error from ${provider}:`, data);
@@ -324,39 +392,37 @@ async function getUserInfo(provider, accessToken) {
   const configs = {
     google: 'https://www.googleapis.com/oauth2/v2/userinfo',
     github: 'https://api.github.com/user',
-    microsoft: 'https://graph.microsoft.com/v1.0/me',
+    // Using the more reliable OpenID Connect userinfo endpoint for Microsoft
+    microsoft: 'https://graph.microsoft.com/oidc/userinfo',
     discord: 'https://discord.com/api/users/@me'
   };
 
   const userInfoUrl = configs[provider];
 
-  console.log(`[USERINFO] Fetching user info from ${provider}`);
+  console.log(`[USERINFO] Fetching from ${provider}: ${userInfoUrl}`);
 
   try {
     const response = await fetch(userInfoUrl, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/json',
-        'User-Agent': 'Cloudflare-Worker-OAuth'
+        'Accept': 'application/json'
       }
     });
 
     const data = await response.json();
     
     console.log(`[USERINFO] Response status: ${response.status}`);
-    console.log(`[USERINFO] Response data:`, JSON.stringify(data));
     
     if (!response.ok) {
       console.error(`[USERINFO] Error from ${provider}:`, data);
-      return data; // Return the error so we can see it
+      return data;
     }
     
     // Normalize user ID field across providers
     return {
-      id: data.id || data.sub,
+      id: data.id || data.sub, // GitHub/Discord use 'id', Google/Microsoft use 'sub'
       email: data.email,
-      name: data.name || data.login || data.username,
-      raw: data // Include raw response for debugging
+      name: data.name || data.login || data.username
     };
   } catch (e) {
     console.error(`[USERINFO] Exception for ${provider}:`, e);
