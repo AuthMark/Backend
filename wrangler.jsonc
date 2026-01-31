@@ -1,24 +1,14 @@
 {
   "name": "authmarkbackend",
-  "compatibility_date": "2026-01-31",
   "main": "index.js",
+  "compatibility_date": "2026-01-31",
   "workers_dev": true,
-  "usage_model": "bundled",
+
   "compatibility_flags": [
     "nodejs_compat"
   ],
+
   "observability": {
     "enabled": true
-  },
-  "limits": {
-    "cpu_ms": 50
-  },
-  "env": {
-    "preview": {
-      "name": "authmark-preview"
-    },
-    "production": {
-      "name": "authmark"
-    }
   }
 }
