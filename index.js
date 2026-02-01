@@ -167,11 +167,11 @@ ${provider === 'microsoft'
   // ── redirect back to CookieCheck with fwacc + provider + accid ──
   const cookieCheckSite = env.COOKIECHECK_SITE || 'https://authmark.github.io/CheckCookie/';
   const redirectUrl = new URL(cookieCheckSite);
-  redirectUrl.searchParams.set('fwacc',    fwacc);       // where to go after
-  redirectUrl.searchParams.set('provider', provider);    // ← was missing (bug 4)
-  redirectUrl.searchParams.set('accid',    accid);       // the generated ID
+  redirectUrl.searchParams.set('fwacc',    fwacc);
+  redirectUrl.searchParams.set('provider', provider);
+  redirectUrl.searchParams.set('accid',    accid);
 
-  console.log(`[CALLBACK] ✅ redirecting to ${redirectUrl.toString()}`);
+  console.log(`[CALLBACK] ✅ Redirecting to: ${redirectUrl.toString()}`);
   return Response.redirect(redirectUrl.toString(), 302);
 }
 
