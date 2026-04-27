@@ -20,9 +20,9 @@ export default {
         environmentVariables: {
           GOOGLE_CLIENT_ID        : env.GOOGLE_CLIENT_ID        ? '✅ Set' : '❌ Missing',
           GOOGLE_CLIENT_SECRET    : env.GOOGLE_CLIENT_SECRET    ? '✅ Set' : '❌ Missing',
-          GITHUB_CLIENT_ID        : env.GITHUB_CLIENT_ID        ? `✅ Set (${env.GITHUB_CLIENT_ID})` : '❌ Missing',
+          GITHUB_CLIENT_ID        : env.GITHUB_CLIENT_ID        ? '✅ Set' : '❌ Missing',
           GITHUB_CLIENT_SECRET    : env.GITHUB_CLIENT_SECRET    ? '✅ Set' : '❌ Missing',
-          MICROSOFT_CLIENT_ID     : env.MICROSOFT_CLIENT_ID     ? `✅ Set (${env.MICROSOFT_CLIENT_ID})` : '❌ Missing',
+          MICROSOFT_CLIENT_ID     : env.MICROSOFT_CLIENT_ID     ? '✅ Set' : '❌ Missing',
           MICROSOFT_CLIENT_SECRET : env.MICROSOFT_CLIENT_SECRET ? '✅ Set' : '❌ Missing',
           DISCORD_CLIENT_ID       : env.DISCORD_CLIENT_ID       ? '✅ Set' : '❌ Missing',
           DISCORD_CLIENT_SECRET   : env.DISCORD_CLIENT_SECRET   ? '✅ Set' : '❌ Missing',
