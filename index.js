@@ -39,10 +39,12 @@ export default {
     // ── route ───────────────────────────────────────────────────────────────
     if (path.startsWith('/login/'))    return handleLogin(url, env);
     if (path.startsWith('/callback/')) return handleCallback(url, request, env);
+    if (path === '/verify')            return handleVerify(request, env);
 
     return new Response(
 `OAuth Worker – Active ✅
 Usage : /login/{provider}?fwacc=YOUR_SITE
+Verify: /verify (POST with accid, userId, provider)
 Debug : ${url.origin}/debug`, { status: 200 });
   }
 };
@@ -175,6 +177,64 @@ ${provider === 'microsoft'
   return Response.redirect(redirectUrl.toString(), 302);
 }
 
+// ─── VERIFY ─────────────────────────────────────────────────────────────────
+async function handleVerify(request, env) {
+  if (request.method !== 'POST') {
+    return new Response('Method not allowed. Use POST.', { status: 405 });
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (e) {
+    return new Response('Invalid JSON body', { status: 400 });
+  }
+
+  const { accid, userId, provider } = body;
+
+  if (!accid || !userId || !provider) {
+    return new Response(JSON.stringify({
+      valid: false,
+      error: 'Missing required fields: accid, userId, provider'
+    }), {
+      status: 400,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
+    });
+  }
+
+  if (!env.ACCID_SECRET) {
+    return new Response(JSON.stringify({
+      valid: false,
+      error: 'ACCID_SECRET not configured'
+    }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
+    });
+  }
+
+  const isValid = await verifyAccid(accid, userId, provider, env.ACCID_SECRET);
+
+  console.log(`[VERIFY] ${provider}:${userId} → ${isValid ? '✅ Valid' : '❌ Invalid'}`);
+
+  return new Response(JSON.stringify({
+    valid: isValid,
+    provider: provider,
+    userId: userId
+  }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*'
+    }
+  });
+}
+
 // ─── TOKEN EXCHANGE ─────────────────────────────────────────────────────────
 async function exchangeCodeForToken(provider, code, origin, env) {
   const configs = {
@@ -258,4 +318,20 @@ async function generateAccid(userId, provider, secret) {
   return Array.from(new Uint8Array(sig))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+// ─── VERIFY ACCID ───────────────────────────────────────────────────────────
+async function verifyAccid(accid, userId, provider, secret) {
+  // Generate what the ACCID should be for this user+provider combination
+  const expectedAccid = await generateAccid(userId, provider, secret);
+  
+  // Constant-time comparison to prevent timing attacks
+  if (accid.length !== expectedAccid.length) return false;
+  
+  let mismatch = 0;
+  for (let i = 0; i < accid.length; i++) {
+    mismatch |= accid.charCodeAt(i) ^ expectedAccid.charCodeAt(i);
+  }
+  
+  return mismatch === 0;
 }
